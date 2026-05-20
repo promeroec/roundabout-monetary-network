@@ -1,4 +1,4 @@
-# Roundabout-Production DSGE with Monetary Frictions and Sectoral Networks
+# Roundabout-Production Network with Monetary Frictions
 
 Replication code for the Handbook chapter
 
