@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the accompanying chapter and this software release."
+title: "Replication code for 'A Roundabout-Production DSGE Model with Monetary Frictions and Sectoral Networks'"
+authors:
+  - family-names: Romero
+    given-names: Pedro
+    affiliation: "Universidad San Francisco de Quito"
+type: software
+license: MIT
+repository-code: "https://github.com/promeroec/roundabout-monetary-network"
+keywords:
+  - DSGE
+  - production networks
+  - monetary economics
+  - roundabout production
+  - Antras
+preferred-citation:
+  type: article
+  title: "A Roundabout-Production DSGE Model with Monetary Frictions and Sectoral Networks"
+  authors:
+    - family-names: Romero
+      given-names: Pedro
+      affiliation: "Universidad San Francisco de Quito"
+  year: 2026
