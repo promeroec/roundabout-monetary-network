@@ -100,10 +100,9 @@ If you use this code, please cite both the chapter and this software release. Th
 ```bibtex
 @incollection{romero2026roundabout,
   author    = {Pedro Romero},
-  title     = {A Roundabout-Production {DSGE} Model with Monetary Frictions and Sectoral Networks},
-  booktitle = {[Handbook title — forthcoming]},
+  title     = {A Roundabout-Production Network with Monetary Frictions}, 
   year      = {2026},
-  publisher = {[Publisher]},
+
 }
 ```
 
