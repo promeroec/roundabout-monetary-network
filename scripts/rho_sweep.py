@@ -1,19 +1,20 @@
 """
 scripts/rho_sweep.py — Preference-driven (rho) comparative statics
-                       under Closure 2 (Antras-Caballero perpetual youth).
+                       under the monetary closure with theta = 0.
 
 Companion to scripts/plots.py (theta-sweep, boom-vs-bust). Sweeps the
-household discount rate rho on a fine grid, holding all other primitives
-fixed, and verifies the closed-form scalings of Proposition rho_scalings:
+household discount rate rho on a fine grid, holding theta = 0 and all
+other primitives fixed, and verifies the closed-form scalings of
+Proposition rho_scalings under the CIA-Fisher closure  r = (1-chi)*rho:
 
-    r*(rho)      = rho * C / (1 + C),
-    t_n*(rho)    = alpha_n * zeta_n * (1+C) / (C * rho),
+    r*(rho)      = (1 - chi) * rho,
+    t_n*(rho)    = alpha_n * zeta_n / ((1 - chi) * rho),
     w(rho)       proportional to rho ^ (-bar_zeta),
-    y_N(rho)     = (1 + C) * w(rho) * L,
-    K*(rho)      = (1 + C) * w(rho) * L / rho,
+    y_N(rho)     = (1 + Psi) * w(rho) * L,
+    K^d(rho)     = Psi * w(rho) * L / ((1 - chi) * rho),
 
 with bar_zeta = sum_n zeta_n * alpha_n * beta_n  (Domar-weighted
-average time intensity).
+average time intensity) and Psi the parametric working-capital wedge.
 
 Two figures are written to Figures/:
 
@@ -48,9 +49,7 @@ from steady_state import (
     ModelParameters,
     MonetaryParameters,
     beta_weights,
-    solve_steady_state_friction,
     solve_steady_state_monetary,
-    solve_steady_state_perpetual_youth,
     verify,
 )
 
@@ -96,23 +95,25 @@ def _run_rho_sweep(rho_grid: np.ndarray):
     yNs   = np.empty_like(rho_grid)
     Ks    = np.empty_like(rho_grid)
     resid = np.empty_like(rho_grid)
+    mon   = MonetaryParameters(chi=CHI, theta=0.0)
     for i, rho in enumerate(rho_grid):
         params = _baseline_params(float(rho))
-        ss = solve_steady_state_perpetual_youth(params)
+        ss = solve_steady_state_monetary(params, mon)
         rs[i]  = ss.r
         t1s[i] = ss.t[0]
         t2s[i] = ss.t[1]
         ws[i]  = ss.w
         yNs[i] = ss.y_N
-        Ks[i]  = ss.K_d           # = K^s by Closure 2 (asserted in solver)
-        r = verify(ss, closure="perpetual_youth")
+        Ks[i]  = ss.K_d
+        r = verify(ss, closure="monetary", mon=mon)
         resid[i] = max(v for k, v in r.items() if k != "passed")
     return dict(rho=rho_grid, r=rs, t1=t1s, t2=t2s, w=ws,
                 y_N=yNs, K=Ks, resid=resid)
 
 
 def _closed_form_predictions(rho_grid: np.ndarray, params0: ModelParameters):
-    """Compute closed-form r*, t_n*, w, y_N, K* at every rho on the grid.
+    """Compute closed-form r*, t_n*, w, y_N, K^d at every rho on the grid
+    under the monetary closure with theta = 0:  r = (1 - chi) * rho.
 
     The proportionality constant for w is calibrated to match the numerical
     value at the benchmark rho.
@@ -122,33 +123,36 @@ def _closed_form_predictions(rho_grid: np.ndarray, params0: ModelParameters):
     beta  = beta_weights(alpha)
     L     = params0.L
 
-    # Parametric C in the log-linear case.
+    # Parametric working-capital wedge Psi in the log-linear case.
     rT_const = np.cumsum((alpha * zeta)[::-1])[::-1]
     raw   = alpha * beta * np.exp(-rT_const)
     share = raw / raw.sum()
-    C     = float(np.sum(share * (np.exp(rT_const) - 1.0)))
+    Psi   = float(np.sum(share * (np.exp(rT_const) - 1.0)))
 
     # Domar-weighted average time intensity.
     bar_zeta = float(np.sum(zeta * alpha * beta))
 
-    # Closed form for r*, t_n*, y_N, K*.
-    r_cf  = rho_grid * C / (1.0 + C)
+    # Closed form for r* under the monetary closure with theta = 0.
+    r_cf  = (1.0 - CHI) * rho_grid
     t1_cf = (alpha[0] * zeta[0]) / r_cf
     t2_cf = (alpha[1] * zeta[1]) / r_cf
 
-    # Proportionality constant for w: pin from a single point.
+    # Proportionality constant for w: pin from a single point under the
+    # monetary closure at theta = 0.
     params_bench = ModelParameters(
         N=params0.N, alpha=alpha.copy(), zeta=zeta.copy(),
         rho=RHO_BENCH, L=L, g_share=params0.g_share,
     )
-    ss_bench  = solve_steady_state_perpetual_youth(params_bench)
+    ss_bench  = solve_steady_state_monetary(
+        params_bench, MonetaryParameters(chi=CHI, theta=0.0)
+    )
     w_const   = ss_bench.w * (RHO_BENCH ** bar_zeta)
     w_cf      = w_const * (rho_grid ** (-bar_zeta))
 
-    yN_cf = (1.0 + C) * w_cf * L
-    K_cf  = (1.0 + C) * w_cf * L / rho_grid
+    yN_cf = (1.0 + Psi) * w_cf * L
+    K_cf  = Psi * w_cf * L / r_cf
     return dict(r=r_cf, t1=t1_cf, t2=t2_cf, w=w_cf, y_N=yN_cf, K=K_cf,
-                C=C, bar_zeta=bar_zeta)
+                Psi=Psi, bar_zeta=bar_zeta)
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +168,7 @@ def _fig_verification(num, cf, figdir, params0):
         ("t2",  r"$t_n^*$  ($n\geq 2$)",   axes[0, 1]),
         ("w",   r"$w$",                    axes[0, 2]),
         ("y_N", r"$y_N$",                  axes[1, 0]),
-        ("K",   r"$K^d = K^s$",            axes[1, 1]),
+        ("K",   r"$K^d$",                  axes[1, 1]),
     ]
     for key, ylabel, ax in panels:
         ax.plot(rho, cf[key], color="k", linestyle="--", linewidth=1.2,
@@ -195,11 +199,13 @@ def _fig_verification(num, cf, figdir, params0):
     ax.grid(alpha=0.3, which="both")
 
     bar_zeta = cf["bar_zeta"]
-    C        = cf["C"]
+    Psi      = cf["Psi"]
     fig.suptitle(
-        r"Preference-driven sweep under Closure 2.  "
-        r"$C = %.4f$,  $\bar\zeta = %.3f$.  "
-        r"Closed-form (dashed) vs numerical (markers)." % (C, bar_zeta),
+        r"Patience sweep under the monetary closure at $\theta = 0$  "
+        r"($r = (1-\chi)\rho$, $\chi = %.2f$).  "
+        r"$\Psi = %.4f$,  $\bar\zeta = %.3f$.  "
+        r"Closed-form (dashed) vs numerical (markers)."
+        % (CHI, Psi, bar_zeta),
         fontsize=11,
     )
     fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -314,7 +320,7 @@ def main() -> None:
     _elasticity_table(num, cf)
 
     print()
-    print(f"Closed-form C       = {cf['C']:.6f}")
+    print(f"Closed-form Psi     = {cf['Psi']:.6f}")
     print(f"Closed-form bar_zeta= {cf['bar_zeta']:.6f}")
     print(f"Friedman locus theta = -rho;  at rho=0.05 this is theta = -0.050")
     print(f"CIA-Fisher wedge phi(rho, theta) = chi*(rho+theta)")
